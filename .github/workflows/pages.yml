@@ -24,6 +24,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/configure-pages@v5
+        with:
+          # Set the Pages source to GitHub Actions if it is not already.
+          enablement: true
       - name: Upload site
         uses: actions/upload-pages-artifact@v3
         with:
