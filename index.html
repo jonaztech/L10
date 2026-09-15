@@ -411,15 +411,22 @@ function linkedDocs(){
 function openDocWindow(url){
   window.open(url,'l10docs','popup=true,width=1500,height=950,left=100,top=50');
 }
-/* walks the list top to bottom, one per press, then wraps to the top */
-function nextDoc(){
+/* where a press in either direction lands; nothing open yet starts at an end */
+function docIndexFrom(list,dir){
+  return docCursor<0 ? (dir>0?0:list.length-1)
+                     : (docCursor+dir+list.length)%list.length;
+}
+/* walks the list one per press, wrapping at both ends */
+function stepDoc(dir){
   const list=linkedDocs();
   if(!list.length){ toast('Nothing linked yet — add the links in Setup'); return; }
-  docCursor=(docCursor+1)%list.length;
+  docCursor=docIndexFrom(list,dir);
   const doc=list[docCursor];
   openDocWindow(doc.url);
   toast(doc.label+' · '+(docCursor+1)+' of '+list.length);
 }
+function nextDoc(){ stepDoc(1); }
+function prevDoc(){ stepDoc(-1); }
 
 function renderDocs(){
   const d=$('docs'); d.innerHTML='';
@@ -478,17 +485,19 @@ const PIP_CSS = ''
  + '#pbar i{display:block;height:100%;background:#56A86A;width:100%}'
  + '#pbar i.warn{background:#F0A830}#pbar i.over{background:#D9534A}'
  + '#pnext{font-size:13px;color:#66757F;font-weight:600;margin-top:7px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'
- + '#pbtns{display:flex;flex-wrap:wrap;gap:6px;margin-top:9px}'
- + '#pbtns button{flex:1;padding:7px 0;background:#36424B;color:#E9EEF1;border:none;border-radius:3px;'
- + "font:600 14px Archivo,'Segoe UI',Arial,sans-serif;cursor:pointer}"
+ + '#pbtns{display:flex;gap:6px;margin-top:9px}'
+ + '#pdocs{display:flex;gap:6px;margin-top:6px}'
+ + '#pbtns button,#pdocs button{flex:1;padding:7px 0;background:#36424B;color:#E9EEF1;border:none;'
+ + "border-radius:3px;font:600 14px Archivo,'Segoe UI',Arial,sans-serif;cursor:pointer}"
  + '#pbtns button:hover{background:#3E4B55}'
- + '#pbtns #pd{flex-basis:100%;background:#2B353D}'
- + '#pbtns #pd:hover{background:#36424B}';
+ + '#pdocs button{background:#2B353D}'
+ + '#pdocs button:hover{background:#36424B}';
 
 const PIP_BODY =
    '<div id="pseg">Not started</div><div id="pread">--:--</div>'
   +'<div id="pbar"><i></i></div><div id="pnext"></div>'
-  +'<div id="pbtns"><button id="pp">Start</button><button id="pn">Next item</button>'
+  +'<div id="pbtns"><button id="pp">Start</button><button id="pn">Next item</button></div>'
+  +'<div id="pdocs"><button id="pb">Prev agenda</button>'
   +'<button id="pd">Next agenda</button></div>';
 
 function wirePip(win){
@@ -497,6 +506,7 @@ function wirePip(win){
   D.getElementById('pp').onclick = ()=>{ running ? togglePause() : startMeeting(); };
   D.getElementById('pn').onclick = nextSegment;
   D.getElementById('pd').onclick = nextDoc;
+  D.getElementById('pb').onclick = prevDoc;
   win.addEventListener('pagehide', dropPip);
   win.addEventListener('unload', dropPip);
   clearInterval(pipTimer);
@@ -552,10 +562,11 @@ function renderPip(){
 
   if(pp) pp.textContent = !running ? 'Start' : (paused?'Resume':'Pause');
 
-  const pd=D.getElementById('pd');          // hover shows where the next press lands
-  if(pd){
+  const pd=D.getElementById('pd'), pb=D.getElementById('pb');   // hover names the landing spot
+  if(pd&&pb){
     const dl=linkedDocs();
-    pd.title = dl.length ? ('opens: '+dl[(docCursor+1)%dl.length].label) : 'nothing linked yet';
+    pd.title = dl.length ? ('opens: '+dl[docIndexFrom(dl, 1)].label) : 'nothing linked yet';
+    pb.title = dl.length ? ('opens: '+dl[docIndexFrom(dl,-1)].label) : 'nothing linked yet';
   }
 
   if(idx<0){
