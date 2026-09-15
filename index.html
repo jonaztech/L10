@@ -289,6 +289,7 @@ function say(text){
 function startMeeting(){
   if(running) return;
   running=true; ended=false; mtgStart=Date.now(); mtgElapsed=0;
+  docCursor=-1;
   beginSegment(0);
   say('Meeting started. First item, '+shortName(cfg.agenda[0].name)+', '+cfg.agenda[0].min+' minutes.');
   $('startBtn').style.display='none';
@@ -400,6 +401,26 @@ function renderWho(){
   $('attsum').textContent = inroom+' in room · '+remote+' remote'+(away?' · '+away+' absent':'');
 }
 
+/* the linked documents, in the order the panel shows them */
+function linkedDocs(){
+  const list=(cfg.docs||[]).filter(d=>d.url);
+  const tied=list.filter(x=>x.seg!==null&&x.seg!==undefined&&cfg.agenda[x.seg]).sort((a,b)=>a.seg-b.seg);
+  const ref =list.filter(x=>!(x.seg!==null&&x.seg!==undefined&&cfg.agenda[x.seg]));
+  return tied.concat(ref);
+}
+function openDocWindow(url){
+  window.open(url,'l10docs','popup=true,width=1500,height=950,left=100,top=50');
+}
+/* walks the list top to bottom, one per press, then wraps to the top */
+function nextDoc(){
+  const list=linkedDocs();
+  if(!list.length){ toast('Nothing linked yet — add the links in Setup'); return; }
+  docCursor=(docCursor+1)%list.length;
+  const doc=list[docCursor];
+  openDocWindow(doc.url);
+  toast(doc.label+' · '+(docCursor+1)+' of '+list.length);
+}
+
 function renderDocs(){
   const d=$('docs'); d.innerHTML='';
   const list=(cfg.docs||[]);
@@ -420,8 +441,7 @@ function renderDocs(){
       el.rel='noopener noreferrer';
       el.onclick=(ev)=>{
         ev.preventDefault();
-        window.open(doc.url,'l10docs',
-          'popup=true,width=1500,height=950,left=100,top=50');
+        openDocWindow(doc.url);
       };
     }
     const when = isRef?'':shortName(cfg.agenda[doc.seg].name);
@@ -445,6 +465,7 @@ function renderDocs(){
 
 /* floating clock — real PiP when available, plain popup otherwise */
 let pip=null, pipTimer=null;
+let docCursor=-1;   // -1 so the first press opens the top of the list
 
 const PIP_CSS = ''
  + '*{box-sizing:border-box;margin:0;padding:0}'
@@ -457,21 +478,25 @@ const PIP_CSS = ''
  + '#pbar i{display:block;height:100%;background:#56A86A;width:100%}'
  + '#pbar i.warn{background:#F0A830}#pbar i.over{background:#D9534A}'
  + '#pnext{font-size:13px;color:#66757F;font-weight:600;margin-top:7px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'
- + '#pbtns{display:flex;gap:6px;margin-top:9px}'
+ + '#pbtns{display:flex;flex-wrap:wrap;gap:6px;margin-top:9px}'
  + '#pbtns button{flex:1;padding:7px 0;background:#36424B;color:#E9EEF1;border:none;border-radius:3px;'
  + "font:600 14px Archivo,'Segoe UI',Arial,sans-serif;cursor:pointer}"
- + '#pbtns button:hover{background:#3E4B55}';
+ + '#pbtns button:hover{background:#3E4B55}'
+ + '#pbtns #pd{flex-basis:100%;background:#2B353D}'
+ + '#pbtns #pd:hover{background:#36424B}';
 
 const PIP_BODY =
    '<div id="pseg">Not started</div><div id="pread">--:--</div>'
   +'<div id="pbar"><i></i></div><div id="pnext"></div>'
-  +'<div id="pbtns"><button id="pp">Start</button><button id="pn">Next item</button></div>';
+  +'<div id="pbtns"><button id="pp">Start</button><button id="pn">Next item</button>'
+  +'<button id="pd">Next agenda</button></div>';
 
 function wirePip(win){
   pip = win;
   const D = win.document;
   D.getElementById('pp').onclick = ()=>{ running ? togglePause() : startMeeting(); };
   D.getElementById('pn').onclick = nextSegment;
+  D.getElementById('pd').onclick = nextDoc;
   win.addEventListener('pagehide', dropPip);
   win.addEventListener('unload', dropPip);
   clearInterval(pipTimer);
@@ -526,6 +551,12 @@ function renderPip(){
   const nx=D.getElementById('pnext'), pp=D.getElementById('pp');
 
   if(pp) pp.textContent = !running ? 'Start' : (paused?'Resume':'Pause');
+
+  const pd=D.getElementById('pd');          // hover shows where the next press lands
+  if(pd){
+    const dl=linkedDocs();
+    pd.title = dl.length ? ('opens: '+dl[(docCursor+1)%dl.length].label) : 'nothing linked yet';
+  }
 
   if(idx<0){
     const first=cfg.agenda[0];
